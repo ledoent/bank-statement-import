@@ -9,7 +9,10 @@ from dateutil.relativedelta import relativedelta
 from odoo.exceptions import ValidationError
 from odoo.tests import common
 
-from .test_account_statement_import_online_plaid import TRANSACTIONS
+from .test_account_statement_import_online_plaid import (
+    PLAID_ACCOUNTS,
+    TRANSACTIONS,
+)
 
 
 class TestPlaidInterface(common.TransactionCase):
@@ -100,6 +103,29 @@ class TestPlaidInterface(common.TransactionCase):
         public_token = "isapulbictoken"
         self.assertRaises(ValidationError, interface_model._login, client, public_token)
 
+    @patch("plaid.api.plaid_api.PlaidApi.accounts_get")
+    def test_get_accounts(self, accounts_get):
+        interface_model = self.env["plaid.interface"]
+        client = interface_model._client("client_id", "secret", "sandbox")
+        accounts_get.return_value = {"accounts": PLAID_ACCOUNTS}
+        res = interface_model._get_accounts(client, "isaccesstoken")
+        self.assertEqual(len(res), 2)
+        self.assertEqual(res[0]["account_id"], PLAID_ACCOUNTS[0]["account_id"])
+
+    @patch(
+        "plaid.api.plaid_api.PlaidApi.accounts_get",
+        side_effect=plaid.ApiException("INVALID_TOKEN", "Token invalid"),
+    )
+    def test_get_accounts_error(self, accounts_get):
+        interface_model = self.env["plaid.interface"]
+        client = interface_model._client("client_id", "secret", "sandbox")
+        self.assertRaises(
+            ValidationError,
+            interface_model._get_accounts,
+            client,
+            "isaccesstoken",
+        )
+
     @patch("plaid.api.plaid_api.PlaidApi.transactions_get")
     def test_get_transactions(self, transactions_get):
         interface_model = self.env["plaid.interface"]
@@ -117,6 +143,27 @@ class TestPlaidInterface(common.TransactionCase):
         )
 
         self.assertTrue(res)
+
+    @patch("plaid.api.plaid_api.PlaidApi.transactions_get")
+    def test_get_transactions_with_account_filter(self, transactions_get):
+        interface_model = self.env["plaid.interface"]
+        client = interface_model._client("client_id", "secret", "sandbox")
+        transactions_get.return_value = {
+            "transactions": TRANSACTIONS,
+            "total_transactions": len(TRANSACTIONS),
+        }
+        access_token = "isaccesstoken"
+        start_date = datetime.datetime.now() - relativedelta(months=1)
+        end_date = datetime.datetime.now()
+        account_ids = ["Qxm5dj75QXuBe5QVPAwbIN1PgEMExnCGroLgv"]
+        res = interface_model._get_transactions(
+            client, access_token, start_date, end_date, account_ids=account_ids
+        )
+        self.assertTrue(res)
+        # Verify account_ids was passed in the request options
+        call_args = transactions_get.call_args
+        request = call_args[0][0]
+        self.assertEqual(request.options.account_ids, account_ids)
 
     @patch(
         "plaid.api.plaid_api.PlaidApi.transactions_get",
