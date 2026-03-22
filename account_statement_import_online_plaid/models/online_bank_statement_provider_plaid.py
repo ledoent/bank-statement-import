@@ -27,6 +27,11 @@ AVAILABLE_LANGS = [
 class OnlineBankStatementProvider(models.Model):
     _inherit = "online.bank.statement.provider"
     plaid_access_token = fields.Char()
+    plaid_account_id = fields.Char(
+        help="Plaid account ID used to filter transactions to this specific "
+        "bank account. Resolved automatically from the journal's bank "
+        "account number on first sync.",
+    )
     plaid_host = fields.Selection(
         [
             ("sandbox", "Sandbox"),
@@ -90,6 +95,29 @@ class OnlineBankStatementProvider(models.Model):
             "target": "new",
         }
 
+    def _plaid_resolve_account_id(self, client):
+        """Resolve the journal's bank account number to a Plaid account ID.
+
+        When a Plaid item contains multiple bank accounts, we must filter
+        transactions to only the account that matches this provider's journal.
+        """
+        account_number = self.account_number
+        if not account_number:
+            # No journal bank account number to match against — leave
+            # filtering off, same as the unmodified upstream behavior.
+            return False
+        plaid_interface = self.env["plaid.interface"]
+        accounts = plaid_interface._get_accounts(client, self.plaid_access_token)
+        # Strip leading zeros for flexible matching (some banks zero-pad)
+        stripped = account_number.lstrip("0")
+        for account in accounts:
+            mask = account.get("mask", "")
+            acct_id = account.get("account_id", "")
+            # Plaid mask is typically the last 4 digits
+            if mask and (account_number.endswith(mask) or stripped.endswith(mask)):
+                return acct_id
+        return False
+
     def _plaid_retrieve_data(self, date_since, date_until):
         if not self.plaid_access_token:
             raise UserError(
@@ -101,8 +129,14 @@ class OnlineBankStatementProvider(models.Model):
         plaid_interface = self.env["plaid.interface"]
         args = [self.username, self.password, self.plaid_host]
         client = plaid_interface._client(*args)
+        # Resolve and cache the Plaid account ID for filtering
+        if not self.plaid_account_id:
+            resolved = self._plaid_resolve_account_id(client)
+            if resolved:
+                self.plaid_account_id = resolved
+        account_ids = [self.plaid_account_id] if self.plaid_account_id else None
         transactions = plaid_interface._get_transactions(
-            client, self.plaid_access_token, date_since, date_until
+            client, self.plaid_access_token, date_since, date_until, account_ids
         )
         return self._prepare_vals_for_statement(transactions)
 
