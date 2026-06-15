@@ -10,7 +10,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from odoo import _, api, fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ class OnlineBankStatementProvider(models.Model):
         host = RAMP_HOSTS.get(self.ramp_host or "sandbox")
         if not host:
             raise UserError(
-                _("Unknown Ramp environment: %(host)s") % {"host": self.ramp_host}
+                self.env._("Unknown Ramp environment: %(host)s", host=self.ramp_host)
             )
         return host
 
@@ -149,7 +149,7 @@ class OnlineBankStatementProvider(models.Model):
         self.ensure_one()
         # Serialise concurrent refreshes on the same provider row.
         self.env.cr.execute(
-            "SELECT id FROM online_bank_statement_provider " "WHERE id = %s FOR UPDATE",
+            "SELECT id FROM online_bank_statement_provider WHERE id = %s FOR UPDATE",
             (self.id,),
         )
         # Drop any cached field values so we see whatever the lock-holder
@@ -162,7 +162,7 @@ class OnlineBankStatementProvider(models.Model):
         client_secret = self.password
         if not client_id or not client_secret:
             raise UserError(
-                _(
+                self.env._(
                     "Ramp client_id and client_secret must be set on the "
                     "provider (Username and Password fields)."
                 )
@@ -184,21 +184,25 @@ class OnlineBankStatementProvider(models.Model):
                 )
         except requests.RequestException as exc:
             raise UserError(
-                _("Ramp token request failed: %(error)s") % {"error": str(exc)}
+                self.env._("Ramp token request failed: %(error)s", error=str(exc))
             ) from exc
         if resp.status_code in (401, 403):
             raise UserError(
-                _(
+                self.env._(
                     "Ramp rejected the client credentials (HTTP %(status)s). "
                     "Verify client_id, client_secret, and that the OAuth2 app "
-                    "is enabled for environment %(env)s."
+                    "is enabled for environment %(env)s.",
+                    status=resp.status_code,
+                    env=self.ramp_host,
                 )
-                % {"status": resp.status_code, "env": self.ramp_host}
             )
         if not resp.ok:
             raise UserError(
-                _("Ramp token request returned HTTP %(status)s: %(body)s")
-                % {"status": resp.status_code, "body": resp.text[:400]}
+                self.env._(
+                    "Ramp token request returned HTTP %(status)s: %(body)s",
+                    status=resp.status_code,
+                    body=resp.text[:400],
+                )
             )
         payload = resp.json()
         token = payload.get("access_token")
@@ -207,7 +211,9 @@ class OnlineBankStatementProvider(models.Model):
         # crashing on ``int(None)``.
         expires_in = int(payload.get("expires_in") or 7200)
         if not token:
-            raise UserError(_("Ramp token response missing access_token field."))
+            raise UserError(
+                self.env._("Ramp token response missing access_token field.")
+            )
         self.write(
             {
                 "ramp_access_token": token,
@@ -255,12 +261,13 @@ class OnlineBankStatementProvider(models.Model):
         parsed = urlparse(url)
         if parsed.scheme != "https" or parsed.hostname != expected:
             raise UserError(
-                _(
+                self.env._(
                     "Ramp returned a URL pointing to an unexpected host "
                     "(%(actual)s, expected %(expected)s). Refusing to "
-                    "follow it."
+                    "follow it.",
+                    actual=parsed.hostname or "<empty>",
+                    expected=expected,
                 )
-                % {"actual": parsed.hostname or "<empty>", "expected": expected}
             )
 
     def _ramp_get(self, session, url, params=None):
@@ -283,7 +290,7 @@ class OnlineBankStatementProvider(models.Model):
             resp = session.get(url, params=params, timeout=_HTTP_TIMEOUT)
         except requests.RequestException as exc:
             raise UserError(
-                _("Ramp API request failed: %(error)s") % {"error": str(exc)}
+                self.env._("Ramp API request failed: %(error)s", error=str(exc))
             ) from exc
         if resp.status_code == 401:
             # Token expired or revoked — drop cache, mint new, retry once.
@@ -294,13 +301,18 @@ class OnlineBankStatementProvider(models.Model):
                 resp = session.get(url, params=params, timeout=_HTTP_TIMEOUT)
             except requests.RequestException as exc:
                 raise UserError(
-                    _("Ramp API request failed after token refresh: %(error)s")
-                    % {"error": str(exc)}
+                    self.env._(
+                        "Ramp API request failed after token refresh: %(error)s",
+                        error=str(exc),
+                    )
                 ) from exc
         if not resp.ok:
             raise UserError(
-                _("Ramp API returned HTTP %(status)s: %(body)s")
-                % {"status": resp.status_code, "body": resp.text[:400]}
+                self.env._(
+                    "Ramp API returned HTTP %(status)s: %(body)s",
+                    status=resp.status_code,
+                    body=resp.text[:400],
+                )
             )
         return resp.json()
 
@@ -340,11 +352,11 @@ class OnlineBankStatementProvider(models.Model):
             url = next_url
             params = None
         raise UserError(
-            _(
+            self.env._(
                 "Ramp pagination did not terminate after %(max)d pages. "
-                "Aborting to avoid an unbounded loop."
+                "Aborting to avoid an unbounded loop.",
+                max=_MAX_PAGES,
             )
-            % {"max": _MAX_PAGES}
         )
 
     # ------------------------------------------------------------------
