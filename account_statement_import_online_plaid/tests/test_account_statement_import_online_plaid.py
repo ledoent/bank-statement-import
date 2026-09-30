@@ -1,5 +1,8 @@
 # Copyright 2024 Binhex - Adasat Torres de León.
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+# ruff: noqa: DTZ001, DTZ005 - Odoo Datetime fields store naive UTC, so the
+# naive datetimes these fixtures build are the correct shape to compare
+# against them; making them aware would change what the assertions mean.
 import datetime
 from unittest.mock import MagicMock, patch
 
@@ -207,7 +210,7 @@ class TestAccountStatementImportOnlinePlaid(common.TransactionCase):
 
         self.bank_account = self.ResPartnerBank.create(
             {
-                "acc_number": "FR0214508000302245362775K46",
+                "account_number": "FR0214508000302245362775K46",
                 "partner_id": self.env.user.company_id.partner_id.id,
             }
         )
@@ -242,7 +245,7 @@ class TestAccountStatementImportOnlinePlaid(common.TransactionCase):
             "transactions": TRANSACTIONS,
             "total_transactions": len(TRANSACTIONS),
         }
-        # Plaid item accounts (our patch resolves journal.acc_number → account_id
+        # Plaid item accounts (our patch resolves journal.account_number → account_id
         # via /accounts/get on the first sync).
         accounts_get.return_value = {"accounts": PLAID_ACCOUNTS}
         vals = {
@@ -273,7 +276,7 @@ class TestAccountStatementImportOnlinePlaid(common.TransactionCase):
         """When a Plaid item has multiple bank accounts, only transactions
         for the account matching this provider's journal should be imported."""
         # Set the journal's bank account number to match account 1
-        self.bank_account.write({"acc_number": "FR0214508000302245365362"})
+        self.bank_account.write({"account_number": "FR0214508000302245365362"})
 
         accounts_get.return_value = {"accounts": PLAID_ACCOUNTS}
 
@@ -326,7 +329,7 @@ class TestAccountStatementImportOnlinePlaid(common.TransactionCase):
     @patch("plaid.api.plaid_api.PlaidApi.transactions_get")
     def test_resolve_account_id_cached(self, transactions_get, accounts_get):
         """The Plaid account ID should be resolved once and cached."""
-        self.bank_account.write({"acc_number": "FR0214508000302245365362"})
+        self.bank_account.write({"account_number": "FR0214508000302245365362"})
         self.provider.plaid_account_id = PLAID_ACCOUNT_ID_1
 
         transactions_get.return_value = {

@@ -1,5 +1,8 @@
 # Copyright 2024 Binhex - Adasat Torres de León.
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+# ruff: noqa: DTZ005 - Odoo Datetime fields store naive UTC, so the
+# naive datetimes these fixtures build are the correct shape to compare
+# against them; making them aware would change what the assertions mean.
 import datetime
 from unittest.mock import MagicMock, patch
 

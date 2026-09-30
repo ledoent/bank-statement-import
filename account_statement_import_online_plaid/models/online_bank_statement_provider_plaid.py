@@ -53,8 +53,9 @@ class OnlineBankStatementProvider(models.Model):
         ]
 
     def _country_code(self):
-        if self.journal_id.bank_id and self.journal_id.bank_id.country:
-            return self.journal_id.bank_id.country.code
+        bank_account = self.journal_id.bank_account_id
+        if bank_account.country_id:
+            return bank_account.country_id.code
         if self.journal_id.company_id.country_id:
             return self.journal_id.company_id.country_id.code
         raise UserError(
@@ -149,9 +150,7 @@ class OnlineBankStatementProvider(models.Model):
         )
         args = [client, public_token]
         provider.plaid_access_token = plaid_interface._login(*args)
-        if provider.plaid_access_token:
-            return True
-        return False
+        return bool(provider.plaid_access_token)
 
     def _prepare_vals_for_statement(self, transactions):
         return [
