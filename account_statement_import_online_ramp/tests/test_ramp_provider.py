@@ -1,5 +1,8 @@
 # Copyright 2026 Ledo Enterprises
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+# ruff: noqa: DTZ001 - Odoo Datetime fields store naive UTC, so the naive
+# datetimes these fixtures build are the correct shape to compare against
+# them; making them aware would change what the assertions mean.
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, Mock, patch
 
@@ -361,9 +364,11 @@ class TestRampProvider(TransactionCase):
             "odoo.addons.account_statement_import_online_ramp"
             ".models.online_bank_statement_provider_ramp.requests.Session"
         )
-        with patch(_SESSION, return_value=mock_session):
-            with self.assertRaises(UserError) as ctx:
-                provider._ramp_fetch_access_token()
+        with (
+            patch(_SESSION, return_value=mock_session),
+            self.assertRaises(UserError) as ctx,
+        ):
+            provider._ramp_fetch_access_token()
         self.assertIn("401", str(ctx.exception))
 
     # ------------------------------------------------------------------
@@ -569,9 +574,11 @@ class TestRampProvider(TransactionCase):
             "odoo.addons.account_statement_import_online_ramp"
             ".models.online_bank_statement_provider_ramp.requests.Session"
         )
-        with patch(_SESSION, return_value=mock_session):
-            with self.assertRaises(UserError) as ctx:
-                provider._ramp_fetch_access_token()
+        with (
+            patch(_SESSION, return_value=mock_session),
+            self.assertRaises(UserError) as ctx,
+        ):
+            provider._ramp_fetch_access_token()
         self.assertIn("access_token", str(ctx.exception))
 
     # ------------------------------------------------------------------
@@ -601,13 +608,15 @@ class TestRampProvider(TransactionCase):
         original = _mod._MAX_PAGES
         _mod._MAX_PAGES = 5
         try:
-            with patch.object(
-                type(self.provider), "_ramp_get", return_value=infinite_page
+            with (
+                patch.object(
+                    type(self.provider), "_ramp_get", return_value=infinite_page
+                ),
+                self.assertRaises(UserError) as ctx,
             ):
-                with self.assertRaises(UserError) as ctx:
-                    self.provider._ramp_fetch_transactions(
-                        datetime(2026, 3, 1), datetime(2026, 3, 31)
-                    )
+                self.provider._ramp_fetch_transactions(
+                    datetime(2026, 3, 1), datetime(2026, 3, 31)
+                )
         finally:
             _mod._MAX_PAGES = original
         self.assertIn("did not terminate", str(ctx.exception))
