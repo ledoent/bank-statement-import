@@ -3,6 +3,9 @@
 # Copyright 2022-2023 Therp BV (https://therp.nl)
 # Copyright 2026 Ryan Duguid <ryan@duguid.com.au>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+# ruff: noqa: DTZ001 - Odoo Datetime fields store naive UTC, so the naive
+# datetimes these fixtures build are the correct shape to compare against
+# them; making them aware would change what the assertions mean.
 import logging
 from datetime import date, datetime
 from unittest import mock

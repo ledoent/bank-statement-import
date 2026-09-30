@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!--
     Copyright 2019-2020 Brainbean Apps (https://brainbeanapps.com)
     Copyright 2019-2020 Dataplug (https://dataplug.io)
@@ -6,13 +6,18 @@
     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 -->
 <odoo>
-    <record model="ir.ui.view" id="view_account_journal_form">
+    <record id="view_account_journal_form" model="ir.ui.view">
         <field name="name">account.journal.form</field>
         <field name="model">account.journal</field>
         <field name="inherit_id" ref="account.view_account_journal_form" />
         <field name="arch" type="xml">
+            <!-- 20.0 added a second bank_statements_source to the journal form,
+                 in group[@name='bank_source'] for the new type == 'credit' card
+                 feeds. Matching on the field and walking up to its parent would
+                 pick one of the two by document order alone, so anchor on the
+                 bank group by name instead. -->
             <xpath
-                expr="//notebook//field[@name='bank_statements_source']/.."
+                expr="//notebook//group[@name='bank_account_number']"
                 position="after"
             >
                 <group

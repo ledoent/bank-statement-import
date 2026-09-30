@@ -1,6 +1,9 @@
 # Copyright 2019-2020 Brainbean Apps (https://brainbeanapps.com)
 # Copyright 2019-2020 Dataplug (https://dataplug.io)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
+# ruff: noqa: DTZ001 - Odoo Datetime fields store naive UTC, so the naive
+# datetimes these fixtures build are the correct shape to compare against
+# them; making them aware would change what the assertions mean.
 
 from datetime import datetime, timedelta
 from random import randrange

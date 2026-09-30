@@ -5,12 +5,12 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from html import escape
+from zoneinfo import ZoneInfo
 
 from dateutil.relativedelta import MO, relativedelta
-from pytz import timezone, utc
 
 from odoo import api, fields, models
 
@@ -21,7 +21,7 @@ _logger = logging.getLogger(__name__)
 
 class OnlineBankStatementProvider(models.Model):
     _name = "online.bank.statement.provider"
-    _inherit = ["mail.thread"]
+    _inherit = "mail.thread"
     _description = "Online Bank Statement Provider"
 
     company_id = fields.Many2one(related="journal_id.company_id", store=True)
@@ -39,7 +39,7 @@ class OnlineBankStatementProvider(models.Model):
     )
     currency_id = fields.Many2one(related="journal_id.currency_id")
     account_number = fields.Char(
-        related="journal_id.bank_account_id.sanitized_acc_number"
+        related="journal_id.bank_account_id.sanitized_account_number"
     )
     tz = fields.Selection(
         selection=_tz_get,
@@ -182,12 +182,11 @@ class OnlineBankStatementProvider(models.Model):
             provider.update_schedule = self.env._(
                 "%(number)s %(type)s",
                 number=provider.interval_number,
-                type=list(
-                    filter(
-                        lambda x: x[0] == provider.interval_type,
-                        self._fields["interval_type"].selection,
-                    )
-                )[0][1],
+                type=next(
+                    label
+                    for value, label in self._fields["interval_type"].selection
+                    if value == provider.interval_type
+                ),
             )
 
     def _pull(self, date_since, date_until):
@@ -237,12 +236,14 @@ class OnlineBankStatementProvider(models.Model):
                 'Online Bank Statement provider "%(name)s" failed to'
                 " obtain statement data since %(since)s until %(until)s"
             ),
-            dict(
-                name=self.name,
-                since=statement_date_since,
-                until=statement_date_until,
-            ),
-            exc_info=True,
+            {
+                "name": self.name,
+                "since": statement_date_since,
+                "until": statement_date_until,
+            },
+            # This helper is only ever called from an `except` block (see _pull),
+            # so the traceback is live even though the handler is not lexical.
+            exc_info=True,  # noqa: LOG014
         )
         self.message_post(
             body=self.env._(
@@ -348,7 +349,7 @@ class OnlineBankStatementProvider(models.Model):
     ):
         """Get lines from line data, but only for the right date."""
         AccountBankStatementLine = self.env["account.bank.statement.line"]
-        provider_tz = timezone(self.tz) if self.tz else utc
+        provider_tz = ZoneInfo(self.tz) if self.tz else timezone.utc
         journal = self.journal_id
         speeddict = journal._statement_line_import_speeddict()
         filtered_lines = []
@@ -360,8 +361,8 @@ class OnlineBankStatementProvider(models.Model):
             if not isinstance(date, datetime):
                 date = fields.Datetime.from_string(date)
             if date.tzinfo is None:
-                date = date.replace(tzinfo=utc)
-            date = date.astimezone(utc).replace(tzinfo=None)
+                date = date.replace(tzinfo=timezone.utc)
+            date = date.astimezone(timezone.utc).replace(tzinfo=None)
             if date < statement_date_since:
                 if "balance_start" in statement_values:
                     statement_values["balance_start"] = Decimal(
@@ -376,19 +377,18 @@ class OnlineBankStatementProvider(models.Model):
                     ) - Decimal(line_values["amount"])
                 lines_after_until += 1
                 continue
-            date = date.replace(tzinfo=utc)
+            date = date.replace(tzinfo=timezone.utc)
             date = date.astimezone(provider_tz).replace(tzinfo=None)
             line_values["date"] = date
             journal._statement_line_import_update_unique_import_id(
                 line_values, self.account_number
             )
             unique_import_id = line_values.get("unique_import_id")
-            if unique_import_id:
-                if AccountBankStatementLine.sudo().search(
-                    [("unique_import_id", "=", unique_import_id)], limit=1
-                ):
-                    lines_not_unique += 1
-                    continue
+            if unique_import_id and AccountBankStatementLine.sudo().search(
+                [("unique_import_id", "=", unique_import_id)], limit=1
+            ):
+                lines_not_unique += 1
+                continue
             if not line_values.get("payment_ref"):
                 line_values["payment_ref"] = line_values.get("ref")
             line_values["journal_id"] = self.journal_id.id
@@ -405,14 +405,14 @@ class OnlineBankStatementProvider(models.Model):
                         ", %(after)s where on or after %(until)s"
                         "and %(duplicate)s where not unique."
                     ),
-                    dict(
-                        lines_provided=len(unfiltered_lines),
-                        before=lines_before_since,
-                        since=statement_date_since,
-                        after=lines_after_until,
-                        until=statement_date_until,
-                        duplicate=lines_not_unique,
-                    ),
+                    {
+                        "lines_provided": len(unfiltered_lines),
+                        "before": lines_before_since,
+                        "since": statement_date_since,
+                        "after": lines_after_until,
+                        "until": statement_date_until,
+                        "duplicate": lines_not_unique,
+                    },
                 )
         return filtered_lines
 
@@ -495,7 +495,7 @@ class OnlineBankStatementProvider(models.Model):
         if providers:
             _logger.info(
                 self.env._("Pulling online bank statements of: %(provider_names)s"),
-                dict(provider_names=", ".join(providers.mapped("journal_id.name"))),
+                {"provider_names": ", ".join(providers.mapped("journal_id.name"))},
             )
             for provider in providers.with_context(
                 scheduled=True, tracking_disable=True
@@ -520,7 +520,7 @@ class OnlineBankStatementProvider(models.Model):
         """
         self.ensure_one()
         delta = self._get_next_run_period()
-        now = datetime.now()
+        now = fields.Datetime.now()
         target_run = self.next_run
         next_run = self.next_run + delta
         while next_run < now:
