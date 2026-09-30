@@ -1,5 +1,8 @@
 # Copyright 2024 Ledo Enterprises
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+# ruff: noqa: DTZ001 - Odoo Datetime fields store naive UTC, so the naive
+# datetimes these fixtures build are the correct shape to compare against
+# them; making them aware would change what the assertions mean.
 from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
@@ -362,9 +365,11 @@ class TestMercuryProvider(TransactionCase):
             return {"accounts": []}
 
         provider = self._new_provider(mercury_account_id=False, password="test-key")
-        with patch.object(type(provider), "_mercury_get", side_effect=_no_accounts):
-            with self.assertRaises(UserError):
-                provider._mercury_resolve_account_id(MagicMock())
+        with (
+            patch.object(type(provider), "_mercury_get", side_effect=_no_accounts),
+            self.assertRaises(UserError),
+        ):
+            provider._mercury_resolve_account_id(MagicMock())
 
     def test_explicit_account_id_skips_api_call(self):
         """When mercury_account_id is set, /accounts is never called."""

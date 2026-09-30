@@ -204,16 +204,16 @@ class OnlineBankStatementProvider(models.Model):
 
     @staticmethod
     def _mercury_parse_datetime(dt_str):
-        """Parse Mercury ISO-8601 UTC timestamp to a naive local datetime."""
+        """Parse a Mercury ISO-8601 UTC timestamp to a UTC-naive datetime."""
         if not dt_str:
-            return datetime.now()
+            return fields.Datetime.now()
         # Handle both 'Z' suffix and '+00:00'
         dt_str = dt_str.replace("Z", "+00:00")
         try:
             dt = datetime.fromisoformat(dt_str)
         except ValueError:
             _logger.debug("Mercury: could not parse date %r, using now()", dt_str)
-            return datetime.now()
+            return fields.Datetime.now()
         # Convert to UTC-naive for Odoo
         if dt.tzinfo is not None:
             dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
