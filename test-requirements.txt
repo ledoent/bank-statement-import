@@ -1,0 +1,5 @@
+# DO NOT MERGE -- temporary pins until the 20.0 ports land and wheels ship.
+# OCA CI appends its own generated entries to this file with >>, so these survive.
+odoo-addon-account_statement_base @ git+https://github.com/ledoent/account-reconcile.git@20.0-mig-account_statement_base#subdirectory=account_statement_base
+odoo-addon-account_statement_import_base @ git+https://github.com/ledoent/bank-statement-import.git@20.0-mig-account_statement_import_base#subdirectory=account_statement_import_base
+odoo-addon-account_statement_import_online @ git+https://github.com/ledoent/bank-statement-import.git@20.0-mig-account_statement_import_online#subdirectory=account_statement_import_online
