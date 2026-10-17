@@ -84,13 +84,13 @@ class AccountStatementImportSheetParser(models.TransientModel):
             raise ValueError(f"Unsupported sheet type: {sheet_type}")
         journal = self.env["account.journal"].browse(self.env.context.get("journal_id"))
         currency_code = (journal.currency_id or journal.company_id.currency_id).name
-        account_number = journal.bank_account_id.acc_number
+        account_number = journal.bank_account_id.account_number
         lines = getattr(self, f"_parse_lines_{sheet_type}")(
             mapping, data_file, currency_code
         )
         if not lines:
             return currency_code, account_number, [{"transactions": []}]
-        lines = list(sorted(lines, key=lambda line: line["timestamp"]))
+        lines = sorted(lines, key=lambda line: line["timestamp"])
         first_line = lines[0]
         last_line = lines[-1]
         data = {
@@ -113,7 +113,7 @@ class AccountStatementImportSheetParser(models.TransientModel):
             )
         transactions = list(
             itertools.chain.from_iterable(
-                map(lambda line: self._convert_line_to_transactions(line), lines)
+                self._convert_line_to_transactions(line) for line in lines
             )
         )
         data.update({"transactions": transactions})
